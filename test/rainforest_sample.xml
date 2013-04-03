@@ -1,0 +1,11 @@
+<InstantaneousDemand>
+  <DeviceMacId>0xd8d5b9000000014b</DeviceMacId>
+  <MeterMacId>0x000781000028c07d</MeterMacId>
+  <TimeStamp>0x18edf577</TimeStamp>
+  <Demand>0x000117</Demand>
+  <Multiplier>0x00000001</Multiplier>
+  <Divisor>0x000003e8</Divisor>
+  <DigitsRight>0x03</DigitsRight>
+  <DigitsLeft>0x06</DigitsLeft>
+  <SuppressLeadingZero>Y</SuppressLeadingZero>
+</InstantaneousDemand>
