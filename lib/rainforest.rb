@@ -1,6 +1,37 @@
 require 'serialport'
+require 'monitor'
+
+# TODO: split into separate files
 
 module Rainforest
+
+  module Utilities
+    extend self
+
+    UTC_EPOCH = Time.utc(2000, 1, 1).to_i
+
+    # TODO: better names!
+
+    # Return seconds since midnight, Jan 1 2000, UTC
+    def utc_seconds(time)
+      time.to_i - UTC_EPOCH
+    end
+
+    def utc_string(time)
+      sprintf("0x%x", utc_seconds(time))
+    end
+    
+    # hex format
+    def utc_now_string
+      utc_string(Time.now)
+    end
+
+    # decimal format
+    def seconds_since_2000
+      utc_seconds(Time.now)
+    end
+
+  end
 
   # ================================================================
   # A simple speaker / listener model: self.broadcast(msg) will cause
@@ -8,9 +39,12 @@ module Rainforest
   #
   module Broadcaster
     require 'set'
+    include MonitorMixin
 
     def broadcast(msg)
-      listeners.each {|listener| listener.receive(msg)}
+      listeners.each do |listener| 
+        listener.synchronize { listener.receive(msg) }
+      end
     end
 
     def add_listener(listener)
@@ -29,6 +63,51 @@ module Rainforest
 
     def listeners
       @listeners ||= Set.new
+    end
+
+  end
+
+  # ================================================================
+  # Abstract class for Broadcaster with a reader thread
+  class ReaderBroadcaster
+    include Broadcaster
+
+    def start
+      begin
+        self.read_setup if self.respond_to?(:read_setup)
+        @reader_thread = Thread.new do
+          read_loop
+        end
+      ensure
+        self.read_teardown if self.respond_to?(:read_teardown)
+      end
+    end
+
+    def stop
+      @reader_thread = nil
+    end
+
+    def reader_thread
+      @reader_thread
+    end
+
+    def read_loop
+      $stderr.puts("=== #{self.class} entering read loop")
+      thread = @reader_thread
+      begin
+        while (thread == @reader_thread)
+          self.reader_body
+        end
+      rescue => e
+        $stderr.puts(e.inspect)
+        $stderr.puts(e.backtrace)
+      end
+      $stderr.puts("=== #{self.class} exiting read loop")
+    end
+
+    # normally subclassed
+    def reader_body
+      sleep(10)
     end
 
   end
@@ -53,8 +132,7 @@ module Rainforest
   #   emu.stop
   # will shut down the asyncrhonous reader thread and close the port.
   #
-  class USBIO
-    include Broadcaster
+  class USBIO < ReaderBroadcaster
     
     BAUD_RATE = 115200
     DATA_BITS = 8
@@ -65,35 +143,20 @@ module Rainforest
     DEFAULT_PORTNAME = "/dev/tty.usbserial"
 
     def initialize(portname = DEFAULT_PORTNAME)
+      super()
       @portname = portname
     end
     
-    def start
+    def read_setup
       @port = SerialPort.open(@portname, BAUD_RATE, DATA_BITS, STOP_BITS, PARITY)
-      @reader_thread = Thread.new do 
-        begin
-          reader_thread
-        ensure
-          @port.close
-        end
-      end
     end
-    
-    def stop
-      @reader_thread = nil
+
+    def read_teardown
+      @port.close
     end
-    
-    def reader_thread
-      $stderr.puts("=== entering reader thread with #{Thread.current}")
-      thread = @reader_thread
-      begin
-        while (thread == @reader_thread)
-          broadcast(@port.readline.chomp)
-        end
-      rescue => e
-        $stderr.puts(e.inspect)
-      end
-      $stderr.puts("=== exiting reader thread with #{Thread.current}")
+
+    def reader_body
+      broadcast(@port.readline.chomp)
     end
     
     def write(string)
@@ -106,35 +169,15 @@ module Rainforest
   # Simulate an EMU-2 device with same semantics as the USBIO device.
   # The only real difference is that it doesn't need the physical
   # USB device.
-  class EmuSim
+  class EmuSim < ReaderBroadcaster
     include Broadcaster
 
-    DEFAULT_PORTNAME = "/dev/tty.usbserial"
-
-    def initialize(portname = DEFAULT_PORTNAME)
-      @portname = portname      # isgnored
-    end
-    
-    def start
-      @reader_thread = Thread.new do 
-        reader_thread
-      end
-    end
-    
-    def stop
-      @reader_thread = nil
-    end
-    
-    def reader_thread
-      $stderr.puts("=== entering reader thread with #{Thread.current}")
-      thread = @reader_thread
-      begin
-        while (thread == @reader_thread)
-          xml =<<EOF
+    def reader_body
+      xml =<<EOF
 <InstantaneousDemand>
   <DeviceMacId>0xd8d5b9000000014b</DeviceMacId>
   <MeterMacId>0x000781000028c07d</MeterMacId>
-  <TimeStamp>#{sprintf("0x%x", Time.now.to_i)}</TimeStamp>
+  <TimeStamp>#{Utilities.utc_now_string}</TimeStamp>
   <Demand>#{sprintf("0x%x", rand(200))}</Demand>
   <Multiplier>0x00000001</Multiplier>
   <Divisor>0x000003e8</Divisor>
@@ -143,17 +186,25 @@ module Rainforest
   <SuppressLeadingZero>Y</SuppressLeadingZero>
 </InstantaneousDemand>
 EOF
-          broadcast(xml)
-          sleep(4)
-        end
-      rescue => e
-        $stderr.puts(e.inspect)
-      end
-      $stderr.puts("=== exiting reader thread with #{Thread.current}")
+      broadcast(xml)
+      sleep(4)
     end
-    
+
     def write(string)
       $stderr.puts("=== write #{string}")
+    end
+
+  end
+
+  class IOReader < ReaderBroadcaster
+
+    def initialize(io = $stdin)
+      super()
+      @io = io
+    end
+
+    def reader_body
+      broadcast(@io.readline.chomp)
     end
 
   end
@@ -167,6 +218,7 @@ EOF
     # state 1: collect input unil we see <\tag>.  Emit saved input, state = 0
 
     def initialize()
+      super()
       @state = 0
       @collected_input = ""
     end
@@ -191,6 +243,18 @@ EOF
         # didn't find closing tag
         @collected_input += string
       end
+    end
+
+  end
+
+  # ================================================================
+  # Broadcast 
+  #   <timestamp>, Annotation, <received_string>
+  class AnnotationFormatter
+    include Broadcaster
+
+    def receive(string)
+      self.broadcast("#{Utilities.seconds_since_2000}, Annotation, #{string}")
     end
 
   end
@@ -222,7 +286,7 @@ EOF
       time_stamp = doc.at_xpath("//TimeStamp").text.to_i(16)
       demand = doc.at_xpath("//Demand").text.to_i(16)
       multiplier = doc.at_xpath("//Multiplier").text.to_i(16)
-      self.broadcast("#{doc.root.name}, #{device_mac_id}, #{meter_mac_id}, #{time_stamp}, #{demand*multiplier}")
+      self.broadcast("#{time_stamp}, #{doc.root.name}, #{demand*multiplier}, #{device_mac_id}, #{meter_mac_id}")
     end
 
   end
@@ -234,6 +298,7 @@ EOF
     include Broadcaster
     
     def initialize(logname = "log")
+      super()
       @logger = Logger.new(logname, 'daily')
       @logger.level = Logger::INFO
       @logger.formatter = proc {|severity, datetime, progname, msg| "#{msg}\n" }
