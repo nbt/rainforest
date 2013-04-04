@@ -4,6 +4,8 @@
 
 load 'lib/rainforest.rb'
 include Rainforest
-(e = USBIO.new) | Coalescer.new | CSVFormatter.new | FileLogger.new("log/rainforest.log") | Echo.new
+(e = USBIO.new) | Coalescer.new | CSVFormatter.new | (f = FileLogger.new("log/rainforest2.log"))
+(r = IOReader.new) | AnnotationFormatter.new | f
 e.start
+r.start
 e.reader_thread.join
