@@ -73,14 +73,14 @@ module Rainforest
     include Broadcaster
 
     def start
-      begin
-        self.read_setup if self.respond_to?(:read_setup)
-        @reader_thread = Thread.new do
+      @reader_thread = Thread.new {
+        begin
+          self.read_setup if self.respond_to?(:read_setup)
           read_loop
+        ensure
+          self.read_teardown if self.respond_to?(:read_teardown)
         end
-      ensure
-        self.read_teardown if self.respond_to?(:read_teardown)
-      end
+      }
     end
 
     def stop
@@ -163,6 +163,38 @@ module Rainforest
       @port.write(string)
     end
     
+  end
+
+  # ================================================================
+  # Read data from a file in lieu of a real device.  Does not attempt
+  # to throttle time.
+  class FileSource < ReaderBroadcaster
+  
+    def initialize(filename)
+      super()
+      @filename = filename
+    end
+
+    def read_setup
+      @file = File.open(@filename)
+    end
+
+    def read_teardown
+      @file.close
+    end
+
+    def reader_body
+      if @file.eof?
+        self.stop
+      else
+        broadcast(@file.readline.chomp)
+      end
+    end
+
+    def write(string)
+      broadcast(string.chomp)
+    end
+
   end
 
   # ================================================================
@@ -269,6 +301,9 @@ EOF
     # Map a tag ("InstantaneousDemand") to a method (:instantaneous_demand)
     TAG_METHODS = Hash.new(:unrecognized)
     TAG_METHODS["InstantaneousDemand"] = :instantaneous_demand
+    TAG_METHODS["TimeCluster"] = :time_cluster
+    TAG_METHODS["CurrentSummationDelivered"] = :current_summation_delivered
+    TAG_METHODS["ConnectionStatus"] = :connection_status
 
     def receive(string)
       doc = Nokogiri.XML(string)
@@ -289,6 +324,48 @@ EOF
       self.broadcast("#{time_stamp}, #{doc.root.name}, #{demand*multiplier}, #{device_mac_id}, #{meter_mac_id}")
     end
 
+    def current_summation_delivered(doc)
+      device_mac_id = doc.at_xpath("//DeviceMacId").text
+      meter_mac_id = doc.at_xpath("//MeterMacId").text
+      time_stamp = doc.at_xpath("//TimeStamp").text.to_i(16)
+      summation_delivered = doc.at_xpath("//SummationDelivered").text.to_i(16)
+      summation_received = doc.at_xpath("//SummationReceived").text.to_i(16)
+      multiplier = doc.at_xpath("//Multiplier").text.to_i(16)
+      multiplier = 1 if multiplier == 0
+      self.broadcast("#{time_stamp}, #{doc.root.name}, #{summation_delivered*multiplier}, #{summation_received*multiplier}, #{device_mac_id}, #{meter_mac_id}")
+    end
+
+    def time_cluster(doc)
+      device_mac_id = doc.at_xpath("//DeviceMacId").text
+      meter_mac_id = doc.at_xpath("//MeterMacId").text
+      utc_time = doc.at_xpath("//UTCTime").text.to_i(16)
+      local_time = doc.at_xpath("//LocalTime").text.to_i(16)
+      self.broadcast("#{utc_time}, #{doc.root.name}, #{local_time}, #{device_mac_id}, #{meter_mac_id}")
+    end
+
+    def connection_status(doc)
+      device_mac_id = doc.at_xpath("//DeviceMacId").text
+      meter_mac_id = doc.at_xpath("//MeterMacId").text
+      status = doc.at_xpath("//Status").text
+      description = (f = doc.at_xpath("//Description")) && f.text
+      status_code = (f = doc.at_xpath("//StatusCode")) && f.text
+      ext_pan_id = (f = doc.at_xpath("//ExtPanId")) && f.text
+      channel = (f = doc.at_xpath("//Channel")) && f.text
+      short_addr = (f = doc.at_xpath("//ShortAddr")) && f.text
+      link_strength = doc.at_xpath("//LinkStrength").text
+      self.broadcast(sprintf("%d, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s",
+                             Utilities.seconds_since_2000, # should be local time, not UTC
+                             doc.root.name,
+                             link_strength,
+                             status,
+                             description,
+                             status_code,
+                             ext_pan_id,
+                             channel,
+                             short_addr,
+                             device_mac_id,
+                             meter_mac_id))
+    end
   end
 
   # ================================================================
