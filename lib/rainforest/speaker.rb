@@ -3,16 +3,17 @@ require 'monitor'
 module Rainforest
 
   # ================================================================
-  # A simple speaker / listener model: self.broadcast(msg) will cause
-  # all listeners to receive rcvr.receive(msg)
+  # The speaker half of a simple speaker / listener model:
+  # self.broadcast(msg) will cause all listeners to receive
+  # listener.listen(msg)
   #
-  module Broadcaster
+  module Speaker
     require 'set'
-    include MonitorMixin
+    include MonitorMixin        # for synchronize
 
     def broadcast(msg)
       listeners.each do |listener| 
-        listener.synchronize { listener.receive(msg) }
+        listener.synchronize { listener.listen(msg) }
       end
     end
 

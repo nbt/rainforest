@@ -22,8 +22,10 @@ module Rainforest
   #   emu.stop
   # will shut down the asyncrhonous reader thread and close the port.
   #
-  class USBIO < ReaderBroadcaster
-    
+  class USBIO < ReaderProcess
+    include Speaker
+    include Listener
+
     BAUD_RATE = 115200
     DATA_BITS = 8
     STOP_BITS = 1
@@ -49,7 +51,8 @@ module Rainforest
       broadcast(@port.readline.chomp)
     end
     
-    def write(string)
+    # Anything received as a Listener is written verbatim to the port.
+    def listen(string)
       @port.write(string)
     end
     

@@ -1,11 +1,12 @@
 module Rainforest
 
   # ================================================================
-  # Echo to standard output
+  # Echo to standard output and rebroadcast
   class Echo
-    include Broadcaster
+    include Listener
+    include Speaker
 
-    def receive(string)
+    def listen(string)
       puts(string)
       self.broadcast(string)
     end

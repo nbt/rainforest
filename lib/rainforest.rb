@@ -3,8 +3,9 @@ require 'pathname'
 module Rainforest
   
   root = Pathname.new(ENV["PWD"])
-  require root.join("lib/rainforest/broadcaster.rb")
-  require root.join("lib/rainforest/reader_broadcaster.rb")
+  puts("=== root = #{root}")
+  require root.join("lib/rainforest/speaker.rb")
+  require root.join("lib/rainforest/reader_process.rb")
   Dir[root.join("lib/rainforest/**/*.rb").to_s].each { |f| require f }
 
 end

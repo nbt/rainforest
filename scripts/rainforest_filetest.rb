@@ -4,6 +4,6 @@
 
 load 'lib/rainforest.rb'
 include Rainforest
-(e = FileSource.new("log/rainforest_samples.log")) | Coalescer.new | CSVFormatter.new | FileLogger.new("log/rainforest_filetest.log") | Echo.new
+(e = FileSource.new("log/rainforest_samples.log")) | Coalescer.new | EmuCSV.new | FileLogger.new("log/rainforest_filetest.log") | Echo.new
 e.start
 e.reader_thread.join

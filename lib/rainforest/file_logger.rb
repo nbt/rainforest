@@ -1,10 +1,13 @@
 module Rainforest
 
+  require 'logger'
+
   # ================================================================
-  # Write create logging file
+  # Listen for messages.  Write message to logfile before
+  # re-broadcasting.
   class FileLogger
-    require 'logger'
-    include Broadcaster
+    include Listener
+    include Speaker
     
     def initialize(logname = "log")
       super()
@@ -13,7 +16,7 @@ module Rainforest
       @logger.formatter = proc {|severity, datetime, progname, msg| "#{msg}\n" }
     end
 
-    def receive(string)
+    def listen(string)
       @logger.info(string)
       self.broadcast(string)
     end

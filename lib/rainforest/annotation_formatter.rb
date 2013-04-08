@@ -1,12 +1,17 @@
+require './lib/rainforest/listener.rb'
+
 module Rainforest
 
   # ================================================================
-  # Broadcast 
-  #   <timestamp>, Annotation, <received_string>
+  # Upon receiving a message, decorate it with
+  #    <timestamp>, Annotation, <message>
+  # and re-broadcast it
+  #
   class AnnotationFormatter
-    include Broadcaster
+    include Listener
+    include Speaker
 
-    def receive(string)
+    def listen(string)
       self.broadcast("#{Utilities.seconds_since_2000}, Annotation, #{string}")
     end
 

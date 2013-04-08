@@ -3,7 +3,8 @@ module Rainforest
   # ================================================================
   # collect lines of text until we have a complete XML fragment
   class Coalescer
-    include Broadcaster
+    include Listener
+    include Speaker
 
     # state 0: ignore input until we see <tag>.  Save tag.
     # state 1: collect input unil we see <\tag>.  Emit saved input, state = 0
@@ -14,7 +15,7 @@ module Rainforest
       @collected_input = ""
     end
 
-    def receive(string)
+    def listen(string)
       if (@state == 0)
         return unless (string =~ /.*?(<([^\/][^>]*)>.*)/m)
         # $1 is the entire string starting with the opening <

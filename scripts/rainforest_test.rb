@@ -2,9 +2,10 @@
 # USAGE:
 # $ ruby scripts/rainforest_test.rb
 
+load 'lib/patch.rb'
 load 'lib/rainforest.rb'
 include Rainforest
-(e = EmuSim.new) | Coalescer.new | CSVFormatter.new | (f = FileLogger.new("log/test.log")) | Echo.new
+(e = EmuSim.new) | Coalescer.new | EmuCSV.new | (f = FileLogger.new("log/test.log")) | Echo.new
 (r = IOReader.new) | AnnotationFormatter.new | f
 
 e.start

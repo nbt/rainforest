@@ -1,9 +1,8 @@
 module Rainforest
 
   # ================================================================
-  # Abstract class for Broadcaster with a reader thread
-  class ReaderBroadcaster
-    include Broadcaster
+  # Abstract class for Speaker with a reader thread
+  class ReaderProcess
 
     def start
       @reader_thread = Thread.new {
@@ -24,6 +23,13 @@ module Rainforest
       @reader_thread
     end
 
+    # normally subclassed
+    def reader_body
+      sleep(10)
+    end
+
+private
+
     def read_loop
       $stderr.puts("=== #{self.class} entering read loop")
       thread = @reader_thread
@@ -36,11 +42,6 @@ module Rainforest
         $stderr.puts(e.backtrace)
       end
       $stderr.puts("=== #{self.class} exiting read loop")
-    end
-
-    # normally subclassed
-    def reader_body
-      sleep(10)
     end
 
   end

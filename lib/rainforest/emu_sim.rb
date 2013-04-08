@@ -4,8 +4,9 @@ module Rainforest
   # Simulate an EMU-2 device with same semantics as the USBIO device.
   # The only real difference is that it doesn't need the physical
   # USB device.
-  class EmuSim < ReaderBroadcaster
-    include Broadcaster
+  class EmuSim < ReaderProcess
+    include Speaker
+    include Listener
 
     def reader_body
       xml =<<EOF
@@ -25,7 +26,7 @@ EOF
       sleep(4)
     end
 
-    def write(string)
+    def listen(string)
       $stderr.puts("=== write #{string}")
     end
 

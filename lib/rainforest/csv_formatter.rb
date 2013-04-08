@@ -2,8 +2,12 @@ module Rainforest
 
   # ================================================================
   # Output recognized XML fragments as CSV strings
+  #
+  # TODO: Replace Nokogiri parsing with simple Hash.from_xml(string),
+  # pass resulting hash to other parts of the system.  (Big change).
+
   class CSVFormatter
-    include Broadcaster
+    include Speaker
 
     require 'nokogiri'
 
@@ -14,7 +18,7 @@ module Rainforest
     TAG_METHODS["CurrentSummationDelivered"] = :current_summation_delivered
     TAG_METHODS["ConnectionStatus"] = :connection_status
 
-    def receive(string)
+    def listen(string)
       doc = Nokogiri.XML(string)
       return unless doc && doc.root && (tag = doc.root.name)
       self.send(TAG_METHODS[tag], doc)

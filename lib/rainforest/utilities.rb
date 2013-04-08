@@ -1,3 +1,5 @@
+require 'active_support/core_ext'
+
 module Rainforest
 
   module Utilities
@@ -26,6 +28,23 @@ module Rainforest
       utc_seconds(Time.now)
     end
 
+    # Convert xml to a hash along with the following type conversions:
+    # * Hexidecimal strings are converted to decimal except DeviceMacID and MeterMacID
+    def xml_to_hash(xml)
+      hash = Hash.from_xml(xml)
+      convert_hex(hash, ["DeviceMacId", "MeterMacId"])
+      hash
+    end
+
+    def convert_hex(hash, exclusions)
+      hash.each_pair do |k, v|
+        if v.instance_of?(Hash)
+          convert_hex(v, exclusions)
+        elsif !exclusions.member?(k) && v =~ /0x\d*/
+          hash[k] = v.to_i(16)
+        end
+      end
+    end
   end
 
 end
